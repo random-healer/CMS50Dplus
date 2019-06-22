@@ -3,8 +3,10 @@ import sys, serial, argparse, csv, datetime
 from dateutil import parser as dateparser
 import time
 
+
 class LiveDataPoint(object):
-    def __init__(self, time, data): 
+
+    def __init__(self, time, data):
         if [d & 0x80 != 0 for d in data] != [True, False, False, False, False]:
            raise ValueError("Invalid data packet.")
 
@@ -32,7 +34,7 @@ class LiveDataPoint(object):
         self.bloodSpO2 = data[4] & 0x7f
 
     def getBytes(self):
-        result = [0]*5
+        result = [0] * 5
 
         # 1st byte
         result[0] = self.signalStrength & 0x0f
@@ -42,7 +44,7 @@ class LiveDataPoint(object):
             result[0] |= 0x20
         if self.beep:
             result[0] |= 0x40
-        result[0] |= 0x80 # sync bit
+        result[0] |= 0x80  # sync bit
 
         # 2nd byte
         result[1] = self.pulseWaveform & 0x7f
@@ -92,7 +94,7 @@ class LiveDataPoint(object):
 
     @staticmethod
     def getCsvColumns():
-        return ["Time", "PulseRate", "SpO2", "PulseWaveform", "BarGraph", 
+        return ["Time", "PulseRate", "SpO2", "PulseWaveform", "BarGraph",
                 "SignalStrength", "Beep", "FingerOut", "Searching",
                 "DroppingSpO2", "ProbeError"]
 
@@ -108,10 +110,12 @@ class LiveDataPoint(object):
             ret[n] = d
         return ret
 
+
 class RecordedDataPoint(object):
+
     def __init__(self, time, data):
         if data[0] & 0xfe != 0xf0 or data[1] & 0x80 == 0 or data[2] & 0x80 != 0:
-           print data
+           print(data)
            raise ValueError("Invalid data packet.")
 
         self.time = time
@@ -126,11 +130,11 @@ class RecordedDataPoint(object):
         self.bloodSpO2 = data[2] & 0x7f
 
     def getBytes(self):
-        result = [0]*3
+        result = [0] * 3
 
         # 1st byte
         result[0] = (self.pulseRate & 0x80) >> 7
-        result[0] |= 0xf0 # sync bits
+        result[0] |= 0xf0  # sync bits
 
         # 2nd byte
         result[1] = self.pulseRate & 0x7f
@@ -159,7 +163,9 @@ class RecordedDataPoint(object):
     def getCsvData(self):
         return [self.time, self.pulseRate, self.bloodSpO2]
 
+
 class CMS50Dplus(object):
+
     def __init__(self, port):
         self.port = port
         self.conn = None
@@ -169,13 +175,13 @@ class CMS50Dplus(object):
 
     def connect(self):
         if self.conn is None:
-            self.conn = serial.Serial(port = self.port,
-                                      baudrate = 19200,
-                                      parity = serial.PARITY_ODD,
-                                      stopbits = serial.STOPBITS_ONE,
-                                      bytesize = serial.EIGHTBITS,
-                                      timeout = 5,
-                                      xonxoff = 1)
+            self.conn = serial.Serial(port=self.port,
+                                      baudrate=19200,
+                                      parity=serial.PARITY_ODD,
+                                      stopbits=serial.STOPBITS_ONE,
+                                      bytesize=serial.EIGHTBITS,
+                                      timeout=5,
+                                      xonxoff=1)
         elif not self.isConnected():
             self.conn.open()
 
@@ -189,7 +195,7 @@ class CMS50Dplus(object):
             return None
         else:
             return ord(char)
-    
+
     def sendBytes(self, values):
         return self.conn.write(''.join([chr(value & 0xff) for value in values]))
 
@@ -205,23 +211,23 @@ class CMS50Dplus(object):
     def getLiveData(self):
         try:
             self.connect()
-            packet = [0]*5
+            packet = [0] * 5
             idx = 0
             while True:
                 byte = self.getByte()
-            
+
                 if byte is None:
                     break
 
                 if byte & 0x80:
                     if idx == 5 and packet[0] & 0x80:
                         yield LiveDataPoint(datetime.datetime.utcnow(), packet)
-                    packet = [0]*5
+                    packet = [0] * 5
                     idx = 0
-            
+
                 if idx < 5:
                     packet[idx] = byte
-                    idx+=1
+                    idx += 1
         except:
             self.disconnect()
 
@@ -239,8 +245,8 @@ class CMS50Dplus(object):
 
             # Wait for preamble.
             for x in range(3):
-                if (not (self.expectByte(0xf2) and 
-                         self.expectByte(0x80) and 
+                if (not (self.expectByte(0xf2) and
+                         self.expectByte(0x80) and
                          self.expectByte(0x00))):
                     raise Exception("No preamble in device response!")
 
@@ -259,34 +265,35 @@ class CMS50Dplus(object):
 
             # Calculate length in hours, minutes, and seconds.
             s = length / 3
-            
+
             h = int(s / 3600)
             s -= h * 3600
 
             m = int(s / 60)
             s -= m * 60
 
-            print "Number of measurements: {0} ({1}h{2}m{3}s)".format(length / 3, h, m, s)
+            print("Number of measurements: {0} ({1}h{2}m{3}s)".format(length / 3, h, m, s))
 
             # Content...
-            packet = [0]*3
+            packet = [0] * 3
             for i in range(length):
                 byte = self.getByte()
                 if byte is None:
                     raise Exception("Timeout during download!")
-                packet[i%3] = byte
-                if i%3 == 2:
+                packet[i % 3] = byte
+                if i % 3 == 2:
                     yield RecordedDataPoint(time, packet)
                     time = time + datetime.timedelta(seconds=1)
-                    packet = [0]*3
+                    packet = [0] * 3
 
         finally:
             self.sendBytes([0xf6, 0xf6, 0xf6])
             self.disconnect()
 
+
 def dumpLiveData(port, filename):
-    print "Saving live data..."
-    print "Press CTRL-C or disconnect the device to terminate data collection."
+    print("Saving live data...")
+    print("Press CTRL-C or disconnect the device to terminate data collection.")
     oximeter = CMS50Dplus(port)
     measurements = 0
     with open(filename, 'wb') as csvfile:
@@ -298,17 +305,18 @@ def dumpLiveData(port, filename):
             sys.stdout.write("\rGot {0} measurements...".format(measurements))
             sys.stdout.flush()
 
+
 def getLiveData(port, framerate=None):
     oximeter = CMS50Dplus(port)
     for liveData in oximeter.getLiveData():
         if framerate is not None:
-            time.sleep(1.0/framerate)
+            time.sleep(1.0 / framerate)
         yield liveData.getDictData()
 
 
 def dumpRecordedData(starttime, port, filename):
-    print "Saving recorded data..."
-    print "Please wait as the latest session is downloaded..."
+    print("Saving recorded data...")
+    print("Please wait as the latest session is downloaded...")
     oximeter = CMS50Dplus(port)
     measurements = 0
     with open(filename, 'wb') as csvfile:
@@ -318,7 +326,8 @@ def dumpRecordedData(starttime, port, filename):
             writer.writerow(recordedData.getCsvData())
             measurements += 1
             sys.stdout.write("\rGot {0} measurements...".format(measurements))
-            sys.stdout.flush()        
+            sys.stdout.flush()
+
 
 def valid_datetime(s):
     try:
@@ -327,6 +336,7 @@ def valid_datetime(s):
         msg = "Not a valid date: '{0}'.".format(s)
         raise argparse.ArgumentTypeError(msg)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="cms50dplus.py v1.2 - Contec CMS50D+ Data Downloader (c) 2015 atbrask")
     parser.add_argument("mode", help="Specify LIVE for live data or RECORDED for recorded data.", choices=["LIVE", "RECORDED"])
@@ -334,14 +344,14 @@ if __name__ == "__main__":
     parser.add_argument("output", help="Output CSV file.")
     parser.add_argument('-s', "--starttime", help="The start time for RECORDED mode data.", type=valid_datetime)
 
-    args = parser.parse_args()
+    args = parser.parse_args(['RECORDED', '/dev/ttyUSB0', 'output.csv', '-s', '2014-01-02'])
 
     if args.mode == 'LIVE':
         dumpLiveData(args.serialport, args.output)
     elif args.mode == 'RECORDED' and args.starttime is not None:
         dumpRecordedData(args.starttime, args.serialport, args.output)
     else:
-        print "Missing start time for RECORDED mode."
+        print("Missing start time for RECORDED mode.")
 
-    print ""
-    print "Done."
+    print("")
+    print("Done.")
